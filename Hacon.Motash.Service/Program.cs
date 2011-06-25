@@ -15,9 +15,9 @@ namespace Hacon.Motash.Service
         {
             ServiceBase[] ServicesToRun;
             ServicesToRun = new ServiceBase[] 
-			{ 
-				new MotashService() 
-			};
+            { 
+                new MotashService() 
+            };
             ServiceBase.Run(ServicesToRun);
         }
     }

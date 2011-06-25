@@ -9,12 +9,31 @@ using Hacon.Lib;
 
 namespace Hacon.Motash
 {
+    /// <summary>
+    /// Class to check the tasks
+    /// </summary>
     public class Checker
     {
         #region Properties and members
+        // store tasks problems in the string
         StringBuilder _tasks = new StringBuilder();
+        // cound our problem
         int _problems = 0;
 
+        /// <summary>
+        /// Use this instead of a hardcoded string
+        /// </summary>
+        public string AppName
+        {
+            get
+            {
+                return "Motash";
+            }
+        }
+
+        /// <summary>
+        /// Constructor, sets the LastCheck time to 1970
+        /// </summary>
         public Checker()
         {
             LastCheck = new DateTime(1970, 1, 1);
@@ -22,6 +41,9 @@ namespace Hacon.Motash
 
         public DateTime LastCheck;
 
+        /// <summary>
+        /// Number of problems found
+        /// </summary>
         public int ProblemCount
         {
             get
@@ -30,6 +52,9 @@ namespace Hacon.Motash
             }
         }
 
+        /// <summary>
+        /// The problems as text
+        /// </summary>
         public string ProblemText
         {
             get
@@ -38,16 +63,23 @@ namespace Hacon.Motash
             }
         }
 
+        /// <summary>
+        /// The email entry, may be configerable in the future.
+        /// </summary>
         public string EmailIntro
         {
             get
             {
-                return "The following task(s) executed with a return value not 0" + Environment.NewLine
-                     + "---------------------------------------------------------" + Environment.NewLine;
+                return "The following task(s) executed with an unexpected return value" + Environment.NewLine
+                     + "--------------------------------------------------------------" + Environment.NewLine;
             }
         }
 
         string _rootFolderPattern = string.Empty;
+        /// <summary>
+        /// The regular expression to match the top level folder against
+        /// </summary>
+        /// <remarks>By default this comes from the app.config</remarks>
         public string RootFolderPattern
         {
             get
@@ -65,28 +97,37 @@ namespace Hacon.Motash
         } 
         #endregion
 
+        /// <summary>
+        /// Runs the actual checks, sets the Problem count and string
+        /// </summary>
+        /// <returns></returns>
         public int Check()
         {
+            // reset our two global counters
             _problems = 0;
             _tasks.Remove(0, _tasks.Length);
 
-      //      if (!IsAdmin()) return SetProblem("No administrator");
+            // check for the correct setup, if one of the checks fails, exit right away.
+            if (!IsAdmin()) return SetProblem(AppName + " does not run as an administrator. This is required");
             if (Environment.OSVersion.Version.Major < 6) return SetProblem("Windows Vista or newer is required");
-            if (!IsServiceRunning()) return SetProblem("Task Scheduler service is not running");
-            if (RootFolderPattern == "") return SetProblem("No RootFolderPattern set");
+            if (!IsServiceRunning()) return SetProblem("The Task Scheduler service is not running");
+            if (RootFolderPattern == "") return SetProblem("No RootFolderPattern set, check your config file.");
 
             try
             {
+                // get an instance on the COM based Task Scheduler object
                 ts.TaskScheduler ts = new ts.TaskScheduler();
-                //ts.Connect(RuntimeEnvironment.ServerName);
-                // for local machine, we don't need to be an admin
                 ts.Connect();
                 ts.ITaskFolder root = ts.GetFolder("\\");
 
+                // loop through the root
                 foreach (ts.ITaskFolder level1 in root.GetFolders(0))
                 {
+                    // any folder must match our pattern, if the pattern is '.' it matches everything
                     if (Regex.IsMatch(level1.Name, RootFolderPattern, RegexOptions.IgnoreCase))
                     {
+                        // go two levels down, this could be done recursively, but who nests
+                        // their tasks that deep.
                         string path1 = "\\" + level1.Name;
                         CheckTasks(ts, path1);
 
@@ -111,9 +152,14 @@ namespace Hacon.Motash
                 _tasks.AppendLine(ex.Message);
                 _problems++;
             }
+
+            // return the number of problems found
             return _problems;
         }
 
+        /// <summary>
+        /// Send a problem report by email
+        /// </summary>
         public void EmailReport()
         {
             if (_problems > 0)
@@ -124,12 +170,20 @@ namespace Hacon.Motash
                 mm.UseHtml = false;
                 mm.AddRecipient(Config.GetApplicationSettingValue("AlertRecipient",""),"");
                 mm.Send();
+
+                if (mm.Result != "")
+                {
+                    Lib.Exceptions.Log(mm.Result);
+                }
             }
         }
 
         #region Private Helper
         private int SetProblem(string problem)
         {
+            _tasks.AppendLine("Setup Problem detected:");
+            _tasks.AppendLine("=======================");
+            _tasks.AppendLine("");
             _tasks.AppendLine(problem);
             _problems = 1;
             return 1;
@@ -154,37 +208,52 @@ namespace Hacon.Motash
             }
         }
 
+        /// <summary>
+        /// Checks tasks in one folder
+        /// </summary>
+        /// <param name="ts"></param>
+        /// <param name="path"></param>
         private void CheckTasks(ts.TaskScheduler ts, string path)
         {
             TaskScheduler.IRegisteredTaskCollection tasksInFolder = ts.GetFolder(path).GetTasks(0);
-
             foreach (ts.IRegisteredTask task in tasksInFolder)
             {
                 try
                 {
-                    if (task.State != TaskScheduler._TASK_STATE.TASK_STATE_DISABLED)
+                    // if task is disabled, ignore it.
+                    if (task.State == TaskScheduler._TASK_STATE.TASK_STATE_DISABLED)
                     {
-                        if (task.State != TaskScheduler._TASK_STATE.TASK_STATE_RUNNING)
-                        {
-                        //    Console.WriteLine(task.Name);
-                         //   Console.WriteLine(task.Definition.RegistrationInfo.Description + "");
-
-                           List<int> allowedResultCodes = GetAllowedResults(task.Definition.RegistrationInfo.Description + "");
-
-                            if (task.LastRunTime >= LastCheck)
-                            {
-                                if (!allowedResultCodes.Contains(task.LastTaskResult))
-                            //    if (task.LastTaskResult != 0)
-                                {
-                                    _tasks.AppendLine(path + @"\" + task.Name + " (" + task.LastTaskResult.ToString() + ") " + task.LastRunTime.ToString("dd MMM yyyy HH:mm:ss"));
-                                    _problems++;
-                                }
-                            }
-                        }
+                        continue;
                     }
+                    // if tasks is currently running, ignore it.
+                    if (task.State == TaskScheduler._TASK_STATE.TASK_STATE_RUNNING)
+                    {
+                        continue;
+                    }
+
+                    // if the task ran last before our last check, we already checked it
+                    // so ignore it this time
+                    if (task.LastRunTime < LastCheck)
+                    {
+                        continue;
+                    }
+
+                    // get a list of allowed exit codes for this tasks, if no custom ones found
+                    // only 0 is allowed
+                    List<int> allowedResultCodes = GetAllowedResults(task.Definition.RegistrationInfo.Description + "");
+
+                    // check whether we have an exit code that is not allowed
+                    if (!allowedResultCodes.Contains(task.LastTaskResult))
+                    {
+                        // add the string and problem count
+                        _tasks.AppendLine(path + @"\" + task.Name + " (" + task.LastTaskResult.ToString() + ") " + task.LastRunTime.ToString("dd MMM yyyy HH:mm:ss"));
+                        _problems++;
+                    }
+                    
                 }
                 catch (Exception ex)
                 {
+                    // in any error case, also add a problem
                     Exceptions.Log(ex);
                     _tasks.AppendLine(ex.Message);
                     _problems++;
@@ -192,6 +261,11 @@ namespace Hacon.Motash
             }
         } 
 
+        /// <summary>
+        /// Gets a list of allowed exit codes
+        /// </summary>
+        /// <param name="description">The string to parse</param>
+        /// <returns>We are looking a curly brackets with just comma separated integers in between.</returns>
         private List<int> GetAllowedResults(string description)
         {
             List<int> results = new List<int>();
