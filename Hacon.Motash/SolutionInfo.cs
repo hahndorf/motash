@@ -3,9 +3,9 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("Hahndorf Consoluting")]
+[assembly: AssemblyCompany("Hahndorf Consulting")]
 [assembly: AssemblyProduct("Hacon.Motash")]
-[assembly: AssemblyCopyright("Copyright © Hahndorf Consoluting 2011")]
+[assembly: AssemblyCopyright("Copyright © Hahndorf Consulting 2011")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 [assembly: ComVisible(false)]
