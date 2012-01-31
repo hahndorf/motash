@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 using System.Security.Principal;
 using System.ServiceProcess;
 using System.Collections.Generic;
-using ts = TaskScheduler;
+using wts = Microsoft.Win32.TaskScheduler;
 using Hacon.Lib;
 
 namespace Hacon.Motash
@@ -16,8 +16,8 @@ namespace Hacon.Motash
     {
         #region Properties and members
         // store tasks problems in the string
-        StringBuilder _tasks = new StringBuilder();
-        // cound our problem
+        private StringBuilder _report = new StringBuilder();
+        // cound our problems
         int _problems = 0;
 
         /// <summary>
@@ -39,6 +39,40 @@ namespace Hacon.Motash
             LastCheck = new DateTime(1970, 1, 1);
         }
 
+        /// <summary>
+        /// Exposes a list of failures
+        /// </summary>
+        public List<Failure> Failures = new List<Failure>();
+
+        /// <summary>
+        /// True if there was a problem with setting up the checker object.
+        /// </summary>
+        public bool SetupProblem { get; private set; }
+
+        private bool? _checkRootTasks;
+
+        /// <summary>
+        /// Should we check tasks in the root, read from config file, default is false
+        /// </summary>
+        public bool CheckRootTasks 
+        {
+            get
+            {
+                if (_checkRootTasks == null)
+                {
+                    _checkRootTasks = bool.Parse(Config.GetApplicationSettingValue("CheckRootTasks", "false"));
+                }
+                return _checkRootTasks.Value;
+            }
+            set
+            {
+                _checkRootTasks = value;
+            }
+        }
+
+        /// <summary>
+        /// Last time we checked
+        /// </summary>
         public DateTime LastCheck;
 
         /// <summary>
@@ -59,7 +93,7 @@ namespace Hacon.Motash
         {
             get
             {
-                return _tasks.ToString();
+                return _report.ToString();
             }
         }
 
@@ -105,56 +139,52 @@ namespace Hacon.Motash
         {
             // reset our two global counters
             _problems = 0;
-            _tasks.Remove(0, _tasks.Length);
+            _report.Remove(0, _report.Length);
 
             // check for the correct setup, if one of the checks fails, exit right away.
-            if (!IsAdmin()) return SetProblem(AppName + " does not run as an administrator. This is required");
+            // with the new wrapper, it seems to work without being an admin
+       //     if (!IsAdmin()) return SetProblem(AppName + " does not run as an administrator. This is required");
             if (Environment.OSVersion.Version.Major < 6) return SetProblem("Windows Vista or newer is required");
             if (!IsServiceRunning()) return SetProblem("The Task Scheduler service is not running");
             if (RootFolderPattern == "") return SetProblem("No RootFolderPattern set, check your config file.");
 
             try
             {
-                // get an instance on the COM based Task Scheduler object
-                ts.TaskScheduler ts = new ts.TaskScheduler();
-                ts.Connect();
-                ts.ITaskFolder root = ts.GetFolder("\\");
-
-                // loop through the root
-                foreach (ts.ITaskFolder level1 in root.GetFolders(0))
+                using (wts.TaskService ts = new wts.TaskService())
                 {
-                    // any folder must match our pattern, if the pattern is '.' it matches everything
-                    if (Regex.IsMatch(level1.Name, RootFolderPattern, RegexOptions.IgnoreCase))
+                    wts.TaskFolder root = ts.RootFolder;
+
+                    if (CheckRootTasks)
                     {
-                        // go two levels down, this could be done recursively, but who nests
-                        // their tasks that deep.
-                        string path1 = "\\" + level1.Name;
-                        CheckTasks(ts, path1);
-
-                        ts.ITaskFolder folder1 = ts.GetFolder(path1);
-                        foreach (ts.ITaskFolder level2 in folder1.GetFolders(0))
-                        {
-                            string path2 = "\\" + level2.Name;
-                            CheckTasks(ts, path1 + path2);
-
-                            ts.ITaskFolder folder2 = ts.GetFolder(path1 + path2);
-                            foreach (ts.ITaskFolder level3 in folder2.GetFolders(0))
-                            {
-                                CheckTasks(ts, path1 + path2 + "\\" + level3.Name);
-                            }
-                        }
+                        CheckTasks(root);
                     }
+
+                    ProcessFolder(root, RootFolderPattern);
                 }
             }
             catch (Exception ex)
             {
                 Exceptions.Log(ex);
-                _tasks.AppendLine(ex.Message);
+                _report.AppendLine(ex.Message);
                 _problems++;
             }
 
             // return the number of problems found
             return _problems;
+        }
+
+        private void ProcessFolder(wts.TaskFolder folder, string filter)
+        {
+            foreach (wts.TaskFolder subFolder in folder.SubFolders)
+            {
+                if (filter != "")
+                {
+                    if (!Regex.IsMatch(subFolder.Name, filter, RegexOptions.IgnoreCase)) continue;
+                }
+
+                CheckTasks(subFolder);
+                ProcessFolder(subFolder, "");
+            }
         }
 
         /// <summary>
@@ -166,7 +196,7 @@ namespace Hacon.Motash
             {
                 MailMessage mm = new MailMessage();
                 mm.Subject = "Failed tasks on " + RuntimeEnvironment.ServerName;
-                mm.Body = EmailIntro + _tasks.ToString();
+                mm.Body = EmailIntro + _report.ToString();
                 mm.UseHtml = false;
                 mm.AddRecipient(Config.GetApplicationSettingValue("AlertRecipient",""),"");
                 mm.Send();
@@ -181,10 +211,8 @@ namespace Hacon.Motash
         #region Private Helper
         private int SetProblem(string problem)
         {
-            _tasks.AppendLine("Setup Problem detected:");
-            _tasks.AppendLine("=======================");
-            _tasks.AppendLine("");
-            _tasks.AppendLine(problem);
+            SetupProblem = true;
+            _report.AppendLine(problem);
             _problems = 1;
             return 1;
         }
@@ -213,20 +241,21 @@ namespace Hacon.Motash
         /// </summary>
         /// <param name="ts"></param>
         /// <param name="path"></param>
-        private void CheckTasks(ts.TaskScheduler ts, string path)
+        private void CheckTasks(wts.TaskFolder folder)
         {
-            TaskScheduler.IRegisteredTaskCollection tasksInFolder = ts.GetFolder(path).GetTasks(0);
-            foreach (ts.IRegisteredTask task in tasksInFolder)
+            //TaskScheduler.IRegisteredTaskCollection tasksInFolder = ts.GetFolder(path).GetTasks(0);
+
+            foreach (wts.Task task in folder.Tasks)
             {
                 try
                 {
                     // if task is disabled, ignore it.
-                    if (task.State == TaskScheduler._TASK_STATE.TASK_STATE_DISABLED)
+                    if (task.State == wts.TaskState.Disabled)
                     {
                         continue;
                     }
                     // if tasks is currently running, ignore it.
-                    if (task.State == TaskScheduler._TASK_STATE.TASK_STATE_RUNNING)
+                    if (task.State == wts.TaskState.Running)
                     {
                         continue;
                     }
@@ -246,8 +275,14 @@ namespace Hacon.Motash
                     if (!allowedResultCodes.Contains(task.LastTaskResult))
                     {
                         // add the string and problem count
-                        _tasks.AppendLine(path + @"\" + task.Name + " (" + task.LastTaskResult.ToString() + ") " + task.LastRunTime.ToString("dd MMM yyyy HH:mm:ss"));
+                        _report.AppendLine(task.Path + " (" + task.LastTaskResult.ToString() + ") " + task.LastRunTime.ToString("dd MMM yyyy HH:mm:ss"));
                         _problems++;
+
+                        Failures.Add(new Failure 
+                            { Name = task.Name, 
+                              Path = task.Path, 
+                              LastRun = task.LastRunTime, 
+                              Result = task.LastTaskResult });
                     }
                     
                 }
@@ -255,7 +290,7 @@ namespace Hacon.Motash
                 {
                     // in any error case, also add a problem
                     Exceptions.Log(ex);
-                    _tasks.AppendLine(ex.Message);
+                    _report.AppendLine(ex.Message);
                     _problems++;
                 }
             }
@@ -265,7 +300,7 @@ namespace Hacon.Motash
         /// Gets a list of allowed exit codes
         /// </summary>
         /// <param name="description">The string to parse</param>
-        /// <returns>We are looking a curly brackets with just comma separated integers in between.</returns>
+        /// <returns>We are looking for curly brackets with just comma separated integers in between.</returns>
         private List<int> GetAllowedResults(string description)
         {
             List<int> results = new List<int>();
