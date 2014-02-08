@@ -17,11 +17,11 @@ namespace Hacon.Motash
         #region Properties and members
         // store tasks problems in the string
         private StringBuilder _report = new StringBuilder();
-        // cound our problems
+        // count our problems
         int _problems = 0;
 
         /// <summary>
-        /// Use this instead of a hardcoded string
+        /// Use this instead of a hard-coded string
         /// </summary>
         public string AppName
         {
@@ -98,7 +98,7 @@ namespace Hacon.Motash
         }
 
         /// <summary>
-        /// The email entry, may be configerable in the future.
+        /// The email entry, may be configurable in the future.
         /// </summary>
         public string EmailIntro
         {
