@@ -10,7 +10,7 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>Hacon.Motash</RootNamespace>
     <AssemblyName>Hacon.Motash</AssemblyName>
-    <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <TargetFrameworkProfile>Client</TargetFrameworkProfile>
   </PropertyGroup>
@@ -38,6 +38,7 @@
       <HintPath>..\bin\Microsoft.Win32.TaskScheduler.dll</HintPath>
     </Reference>
     <Reference Include="System" />
+    <Reference Include="System.ComponentModel.Composition" />
     <Reference Include="System.Core" />
     <Reference Include="System.ServiceProcess" />
     <Reference Include="System.Data" />
@@ -45,7 +46,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Failure.cs" />
-    <Compile Include="MailMessage.cs" />
+    <Compile Include="INotifier.cs" />
     <Compile Include="SolutionInfo.cs" />
     <Compile Include="Checker.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

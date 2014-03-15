@@ -4,6 +4,8 @@ using System.Text.RegularExpressions;
 using System.Security.Principal;
 using System.ServiceProcess;
 using System.Collections.Generic;
+using System.ComponentModel.Composition;
+using System.ComponentModel.Composition.Hosting;
 using wts = Microsoft.Win32.TaskScheduler;
 using Hacon.Lib;
 
@@ -15,10 +17,12 @@ namespace Hacon.Motash
     public class Checker
     {
         #region Properties and members
-        // store tasks problems in the string
-        private StringBuilder _report = new StringBuilder();
-        // count our problems
-        int _problems = 0;
+  
+        const int _appErrorId = -10556;
+        const int _appWarningId = -10557;
+
+        [ImportMany(typeof(INotifier))]
+        private List<INotifier> _notifiers { get; set; }
 
         /// <summary>
         /// Use this instead of a hard-coded string
@@ -47,7 +51,7 @@ namespace Hacon.Motash
         /// <summary>
         /// True if there was a problem with setting up the checker object.
         /// </summary>
-        public bool SetupProblem { get; private set; }
+        public bool WeHaveASetupProblem { get; private set; }
 
         private bool? _checkRootTasks;
 
@@ -74,40 +78,6 @@ namespace Hacon.Motash
         /// Last time we checked
         /// </summary>
         public DateTime LastCheck;
-
-        /// <summary>
-        /// Number of problems found
-        /// </summary>
-        public int ProblemCount
-        {
-            get
-            {
-                return _problems;
-            }
-        }
-
-        /// <summary>
-        /// The problems as text
-        /// </summary>
-        public string ProblemText
-        {
-            get
-            {
-                return _report.ToString();
-            }
-        }
-
-        /// <summary>
-        /// The email entry, may be configurable in the future.
-        /// </summary>
-        public string EmailIntro
-        {
-            get
-            {
-                return "The following task(s) executed with an unexpected return value" + Environment.NewLine
-                     + "--------------------------------------------------------------" + Environment.NewLine;
-            }
-        }
 
         string _rootFolderPattern = string.Empty;
         /// <summary>
@@ -137,10 +107,6 @@ namespace Hacon.Motash
         /// <returns></returns>
         public int Check()
         {
-            // reset our two global counters
-            _problems = 0;
-            _report.Remove(0, _report.Length);
-
             // check for the correct setup, if one of the checks fails, exit right away.
             // with the new wrapper, it seems to work without being an admin
        //     if (!IsAdmin()) return SetProblem(AppName + " does not run as an administrator. This is required");
@@ -165,13 +131,54 @@ namespace Hacon.Motash
             catch (Exception ex)
             {
                 Exceptions.Log(ex);
-                _report.AppendLine(ex.Message);
-                _problems++;
+                Failures.Add(new Failure
+                {
+                    Name = "Application Exception",
+                    Path = ex.Message,
+                    LastRun = DateTime.Now,
+                    Result = _appErrorId,
+                });
             }
 
             // return the number of problems found
-            return _problems;
+            return Failures.Count;
         }
+
+        /// <summary>
+        /// Runs all available notifies.
+        /// </summary>
+        /// <returns>Number of notifiers executed</returns>
+        public int Notify()
+        {
+            int notifierCount = 0;
+
+            if (Failures.Count > 0)
+            {
+                try
+                {
+                    AggregateCatalog cat = new AggregateCatalog();
+                    cat.Catalogs.Add(new DirectoryCatalog("."));
+                    CompositionContainer contnr = new CompositionContainer(cat);
+
+                    contnr.ComposeParts(this);
+
+                    // loop through them
+                    foreach (INotifier noti in this._notifiers)
+                    {
+                        noti.Send(Failures);
+                        notifierCount++;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Exceptions.Log(ex);
+                }
+            }
+
+            return notifierCount;
+        }
+
+        #region Private Helper
 
         private void ProcessFolder(wts.TaskFolder folder, string filter)
         {
@@ -187,33 +194,18 @@ namespace Hacon.Motash
             }
         }
 
-        /// <summary>
-        /// Send a problem report by email
-        /// </summary>
-        public void EmailReport()
-        {
-            if (_problems > 0)
-            {
-                MailMessage mm = new MailMessage();
-                mm.Subject = "Failed tasks on " + RuntimeEnvironment.ServerName;
-                mm.Body = EmailIntro + _report.ToString();
-                mm.UseHtml = false;
-                mm.AddRecipient(Config.GetApplicationSettingValue("AlertRecipient",""),"");
-                mm.Send();
 
-                if (mm.Result != "")
-                {
-                    Lib.Exceptions.Log(mm.Result);
-                }
-            }
-        }
-
-        #region Private Helper
         private int SetProblem(string problem)
         {
-            SetupProblem = true;
-            _report.AppendLine(problem);
-            _problems = 1;
+            WeHaveASetupProblem = true;
+            Failures.Add(new Failure
+            {
+                Name = "Application Warning",
+                Path = problem,
+                LastRun = DateTime.Now,
+                Result = _appWarningId,
+            });
+
             return 1;
         }
 
@@ -236,6 +228,19 @@ namespace Hacon.Motash
             }
         }
 
+        public static string FailuresAsText(List<Failure> failures, string format = "{0} ({1}) at: {2}")
+        {
+            StringBuilder text = new StringBuilder();
+
+            foreach (Failure failure in failures)
+            {
+                text.AppendLine(string.Format(format, failure.Path,
+                    failure.Result.ToString(),failure.LastRun.ToString("dd-MMM-yyyy HH:mm:ss")));
+            }
+
+            return text.ToString();
+        }
+
         /// <summary>
         /// Checks tasks in one folder
         /// </summary>
@@ -243,8 +248,6 @@ namespace Hacon.Motash
         /// <param name="path"></param>
         private void CheckTasks(wts.TaskFolder folder)
         {
-            //TaskScheduler.IRegisteredTaskCollection tasksInFolder = ts.GetFolder(path).GetTasks(0);
-
             foreach (wts.Task task in folder.Tasks)
             {
                 try
@@ -274,24 +277,24 @@ namespace Hacon.Motash
                     // check whether we have an exit code that is not allowed
                     if (!allowedResultCodes.Contains(task.LastTaskResult))
                     {
-                        // add the string and problem count
-                        _report.AppendLine(task.Path + " (" + task.LastTaskResult.ToString() + ") " + task.LastRunTime.ToString("dd MMM yyyy HH:mm:ss"));
-                        _problems++;
-
                         Failures.Add(new Failure 
                             { Name = task.Name, 
                               Path = task.Path, 
                               LastRun = task.LastRunTime, 
                               Result = task.LastTaskResult });
-                    }
-                    
+                    }                    
                 }
                 catch (Exception ex)
                 {
                     // in any error case, also add a problem
                     Exceptions.Log(ex);
-                    _report.AppendLine(ex.Message);
-                    _problems++;
+                    Failures.Add(new Failure
+                    {
+                        Name = task.Name,
+                        Path = task.Path,
+                        LastRun = DateTime.Now,
+                        Result = task.LastTaskResult
+                    });
                 }
             }
         } 

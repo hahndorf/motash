@@ -7,14 +7,20 @@ namespace Hacon.Motash.Console
         static void Main(string[] args)
         {
             Checker chk = new Checker();
-            int problems = chk.Check();
-            if (problems > 0)
-            {
-                System.Console.WriteLine("Failed tasks: ");
-                System.Console.WriteLine(chk.ProblemText);
-                chk.EmailReport();
-                System.Console.WriteLine("Email sent");
-            }
+            chk.Check();
+            chk.Notify();
+
+            //if (problems > 0)
+            //{
+            //    System.Console.WriteLine("Failed tasks: ");
+            //    System.Console.WriteLine(Checker.FailuresAsText(chk.Failures));
+            //    //   chk.EmailReport();
+            //    System.Console.WriteLine("Email sent");
+            //}
+            //else
+            //{
+            //    System.Console.WriteLine("No problems found");
+            //}
         }
     }
 }

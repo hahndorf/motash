@@ -7,13 +7,13 @@ using Hacon.Lib;
 namespace Hacon.Motash.Tray
 {
 
-	public class SystemTray : System.Windows.Forms.Form
-	{
-		private System.Windows.Forms.NotifyIcon WSNotifyIcon;
+    public class SystemTray : System.Windows.Forms.Form
+    {
+        private System.Windows.Forms.NotifyIcon WSNotifyIcon;
         private System.ComponentModel.IContainer components;
 
-		private Icon mDirIcon = 
-			new Icon(typeof(SystemTray).Assembly.GetManifestResourceStream
+        private Icon mDirIcon = 
+            new Icon(typeof(SystemTray).Assembly.GetManifestResourceStream
             ("Hacon.Motash.Tray.app.ico"));
 
         private System.Threading.Timer _checkTimer;
@@ -35,13 +35,13 @@ namespace Hacon.Motash.Tray
             }
         }
 
-		public SystemTray()
-		{
-			//constructor for the form
-			InitializeComponent();
+        public SystemTray()
+        {
+            //constructor for the form
+            InitializeComponent();
 
-			//keep the form hidden
-			this.Hide();
+            //keep the form hidden
+            this.Hide();
             WSNotifyIcon.Icon = mDirIcon;
             WSNotifyIcon.Text = "Monitoring scheduled tasks";
             WSNotifyIcon.Visible = true;
@@ -67,7 +67,7 @@ namespace Hacon.Motash.Tray
             // the timer itself
             _checkTimer = new System.Threading.Timer(tc, null, 0, WaitTime);
 
-		}
+        }
 
         private void OnCheckTimerEvent(object state)
         {
@@ -84,8 +84,7 @@ namespace Hacon.Motash.Tray
             _lastCheck = DateTime.Now;
             // check for failed tasks
             int problems = chk.Check();
-            // if we have any email the report          
-
+    
             if (problems > 0)
             {
                 string title = problems.ToString() + " tasks failed";
@@ -101,13 +100,6 @@ namespace Hacon.Motash.Tray
                 foreach (var failure in chk.Failures)
                 {
                     body += failure.Path + System.Environment.NewLine;
-                }
-
-                if (chk.SetupProblem)
-                {
-                    // somethings wrong 
-                    title = "Somethings not right!";
-                    body = chk.ProblemText;
                 }
 
                 WSNotifyIcon.BalloonTipTitle = title;
@@ -129,20 +121,20 @@ namespace Hacon.Motash.Tray
             this.Close();
         }
 
-		/// <summary>
-		/// Clean up any resources being used.
-		/// </summary>
-		protected override void Dispose(bool disposing)
-		{
-			if (disposing)
-			{
-				if (components != null)
-				{
-					components.Dispose();
-				}
-			}
-			base.Dispose(disposing);
-		}
+        /// <summary>
+        /// Clean up any resources being used.
+        /// </summary>
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                if (components != null)
+                {
+                    components.Dispose();
+                }
+            }
+            base.Dispose(disposing);
+        }
 
         internal static void PlaySound(string ringToneFile, bool showMessageBoxForProblems)
         {
@@ -193,13 +185,13 @@ namespace Hacon.Motash.Tray
             }
         }
 
-		#region Windows Form Designer generated code
-		/// <summary>
-		/// Required method for Designer support - do not modify
-		/// the contents of this method with the code editor.
-		/// </summary>
-		private void InitializeComponent()
-		{
+        #region Windows Form Designer generated code
+        /// <summary>
+        /// Required method for Designer support - do not modify
+        /// the contents of this method with the code editor.
+        /// </summary>
+        private void InitializeComponent()
+        {
             this.components = new System.ComponentModel.Container();
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(SystemTray));
             this.WSNotifyIcon = new System.Windows.Forms.NotifyIcon(this.components);
@@ -225,17 +217,17 @@ namespace Hacon.Motash.Tray
             this.ShowInTaskbar = false;
             this.ResumeLayout(false);
 
-		}
-		#endregion
+        }
+        #endregion
 
-		/// <summary>
-		/// The main entry point for the application.
-		/// </summary>
-		[STAThread]
-		static void Main(string[] args)
-		{
-			Application.EnableVisualStyles();
+        /// <summary>
+        /// The main entry point for the application.
+        /// </summary>
+        [STAThread]
+        static void Main(string[] args)
+        {
+            Application.EnableVisualStyles();
             Application.Run(new SystemTray());
-		}	
-	}
+        }	
+    }
 }

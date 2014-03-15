@@ -52,12 +52,8 @@ namespace Hacon.Motash.Service
             // remember the new last checked time, which is now
             _lastCheck = DateTime.Now;
             // check for failed tasks
-            int problems = chk.Check();
-            // if we have any email the report
-            if (problems > 0)
-            {
-                chk.EmailReport();
-            }
+            chk.Check();
+            chk.Notify();
         }
 
         public MotashService()

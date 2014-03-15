@@ -29,7 +29,7 @@ namespace Hacon.Lib
     /// }
     /// </code>
     /// </example>
-    public class MailMessage
+    internal class MailMessage
     {
         System.Net.Mail.MailMessage _mailMessage = new System.Net.Mail.MailMessage();
         SmtpClient _smtpClient = new SmtpClient();
@@ -40,7 +40,7 @@ namespace Hacon.Lib
         /// <summary>
         /// Create an instance of this class to send an SMTP message
         /// </summary>
-        public MailMessage()
+        internal MailMessage()
         {
             Host = _smtpClient.Host;
 
@@ -280,7 +280,7 @@ namespace Hacon.Lib
         /// If returning false, the result property has the details.
         /// </summary>
         /// <returns>True if all data is valid and we are ready for sending the message</returns>
-        public bool IsValid()
+        internal bool IsValid()
         {
             string problem = string.Empty;
 
@@ -323,7 +323,7 @@ namespace Hacon.Lib
 
         }
 
-        public static bool IsValidAddress(string address, bool allowNameSyntax)
+        internal static bool IsValidAddress(string address, bool allowNameSyntax)
         {
 
             // test for a valid e-mail format, see below for criteria
