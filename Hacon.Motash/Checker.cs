@@ -274,6 +274,11 @@ namespace Hacon.Motash
                     // only 0 is allowed
                     List<int> allowedResultCodes = GetAllowedResults(task.Definition.RegistrationInfo.Description + "");
 
+                    const int SCHED_S_TASK_RUNNING = 267009;
+                    // also allow exit code 0x00041301 or 267009 which is SCHED_S_TASK_RUNNING
+                    // why this is not covered by wts.TaskState.Running above, I don't know
+                    allowedResultCodes.Add(SCHED_S_TASK_RUNNING);
+
                     // check whether we have an exit code that is not allowed
                     if (!allowedResultCodes.Contains(task.LastTaskResult))
                     {
