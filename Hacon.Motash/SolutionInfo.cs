@@ -5,10 +5,10 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("Hahndorf Consulting")]
 [assembly: AssemblyProduct("Hacon.Motash")]
-[assembly: AssemblyCopyright("Copyright © Hahndorf Consulting 2011-2014")]
+[assembly: AssemblyCopyright("Copyright © Hahndorf Consulting 2011-2024")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 [assembly: ComVisible(false)]
 
 [assembly: AssemblyVersion("2.0.0.0")]
-[assembly: AssemblyFileVersion("2.0.10.0")]
+[assembly: AssemblyFileVersion("2.0.11.0")]
